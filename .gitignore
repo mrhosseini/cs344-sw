@@ -16,5 +16,8 @@
 *.out
 *.app
 
-#backup files
+# Backup files
 *~
+
+# .d helpers for make
+.*.d
