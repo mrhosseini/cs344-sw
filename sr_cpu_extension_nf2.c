@@ -146,7 +146,7 @@ int sr_cpu_input(struct sr_instance* sr)
 	
 	fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 	fprintf(stderr, "!!!  sr_cpu_input(..) (sr_cpu_extension_nf2.c) called while running in cpu mode     !!!\n");
-	fprintf(stderr, "!!!  you need to implement this function to read from the hardware                  !!!\n");
+// 	fprintf(stderr, "!!!  you need to implement this function to read from the hardware                  !!!\n");
 	fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 	
 	//while (1);

@@ -149,6 +149,7 @@ int router_processPacket(struct sr_instance* sr, const uint8_t* packet, int len,
 	switch(eth_type){
 		case ETH_TYPE_ARP:
 			printf("\nPacket Type: ARP, length: %d, Interface: %s", len, interface);
+			arp_processPacket(sr, packet, len, interface);
 			break;
 		case ETH_TYPE_IP:
 			printf("\nPacket Type: IP,  length: %d, Interface: %s",len, interface);
