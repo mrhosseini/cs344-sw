@@ -166,8 +166,8 @@ int sr_cpu_input(struct sr_instance* sr)
 			FD_SET(router->sockfd[i], &read_set);
 		}
 		
-		struct timeval t;
-		t.tv_usec = 500; // timeout every half a millisecond
+// 		struct timeval t;
+// 		t.tv_usec = 500; // timeout every half a millisecond
 		
 		int nfd = array_max(router->sockfd, NUM_INTERFACES) + 1;
 		if (select(nfd, &read_set, NULL, NULL, NULL) < 0) {
@@ -260,9 +260,9 @@ int sr_cpu_output(struct sr_instance* sr /* borrowed */,
 	while (written_length < len) {
 		FD_SET(router->sockfd[i], &write_set);
 		
-		struct timeval t;
-		t.tv_sec = 0;
-		t.tv_usec = 500; // timeout every half a millisecond
+// 		struct timeval t;
+// 		t.tv_sec = 0;
+// 		t.tv_usec = 500; // timeout every half a millisecond
 		
 		if (select(router->sockfd[i]+1, NULL, &write_set, NULL, NULL) < 0) {
 			perror("select");

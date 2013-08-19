@@ -13,6 +13,7 @@
 #include "ll.h"
 
 #include <stdint.h>
+#include <pthread.h>
 
 
 ///number of hardware interfaces 
@@ -43,6 +44,8 @@ typedef struct Router{
 	struct nf2device netfpga;
 	node_t* arp_cache;
 	node_t* arp_queue;
+	pthread_rwlock_t lock_arp_cache;
+	pthread_rwlock_t lock_arp_queue;
 	
 } router_t;
 
@@ -55,6 +58,15 @@ void router_initInterfaces(router_t* router, interface_t* interface, struct sr_v
 
 int router_sendPacket(struct sr_instance* sr, uint8_t* packet, unsigned int len, const char* interface);
 
+int router_lockRead(pthread_rwlock_t* lock);
+
+int router_lockWrite(pthread_rwlock_t* lock);
+
+int router_unlock(pthread_rwlock_t* lock);
+
+int router_ip2mac(struct sr_instance* sr, uint8_t* packet, unsigned int len, struct in_addr* next_hop, const char* out_iface);
+
+int router_getInterfaceIndex(router_t* router, const char* interface);
 
 
 #endif

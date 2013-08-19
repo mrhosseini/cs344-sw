@@ -11,6 +11,7 @@
 #include "nf2.h"
 #include "nf2util.h"
 #include "router.h"
+#include "arp.h"
 
 
 #define ETH0 "eth0"
@@ -26,5 +27,6 @@ typedef struct netfpga{
 int netfpga_init(router_t* router);
 int netfpga_initInterfaces(router_t* router, interface_t* interface);
 int netfpga_getPortNum(const char* name);
+void netfpga_writeArpCacheItem(struct nf2device* netfpga, arp_item_t* arp_item, int row);
 
 #endif

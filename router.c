@@ -17,6 +17,7 @@
 #include "netfpga.h"
 #include "functions.h"
 #include "ethernet.h"
+#include "arp.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -93,6 +94,16 @@ int router_init(struct sr_instance* sr){
 	router->arp_cache = NULL;
 	router->arp_queue = NULL;
 	
+	if (pthread_rwlock_init(&router->lock_arp_cache, NULL) != 0) {
+		perror("Lock init error");
+		exit(1);
+	}
+	
+	if (pthread_rwlock_init(&router->lock_arp_queue, NULL) != 0) {
+		perror("Lock init error");
+		exit(1);
+	}
+	
 	/*
 	 * register with the global instance
 	 */
@@ -118,7 +129,9 @@ int router_init(struct sr_instance* sr){
 		exit(1);
 	}
 	
-	/* initialize the hardware */
+	/* 
+	 * initialize the hardware 
+	 */
 	netfpga_init(router);
 	
 	#else
@@ -202,4 +215,72 @@ int router_sendPacket(struct sr_instance* sr, uint8_t* packet, unsigned int len,
 // 	}TODO: unlock
 	
 	return result;
+}
+
+
+int router_lockRead(pthread_rwlock_t* lock){
+	if (pthread_rwlock_rdlock(lock) != 0){
+		perror("pthread_rwlock_rdlock");
+		return -1;
+	}
+	return 0;
+}
+
+
+int router_lockWrite(pthread_rwlock_t* lock){
+	if (pthread_rwlock_wrlock(lock) != 0){
+		perror("pthread_rwlock_wrlock");
+		return -1;
+	}
+	return 0;
+}
+
+int router_unlock(pthread_rwlock_t* lock){
+	if (pthread_rwlock_unlock(lock) != 0) {
+		perror("Failure releasing lock");
+		return -1;
+	}
+	return 0;
+}
+
+
+
+/**
+ * find ETH address of packet and send it, if not find add to queue
+ */
+int router_ip2mac(struct sr_instance* sr, uint8_t* packet, unsigned int len, struct in_addr* next_hop, const char* out_iface) {
+	
+	router_t* router = (router_t*) sr_get_subsystem(sr);
+	eth_header_t* eth = (eth_header_t*) packet;
+	
+	
+	arp_item_t* arp_item = arp_searchCache(router, next_hop);
+ 	if (arp_item) {
+		memcpy(eth->d_addr, arp_item->arp_ha, ETH_ADDR_LEN);
+		
+		if (router_sendPacket(sr, packet, len, out_iface) != 0) {
+			printf("Failure sending IP packet\n");
+			free(packet);
+			return 1;
+		}
+		
+		free(packet);
+	} else {
+		/* 
+		 * add the packet to the queue, will free later 
+		 */
+		arp_qAdd(sr, packet, len, out_iface, next_hop);
+	}
+	
+	return 0;
+}
+
+int router_getInterfaceIndex(router_t* router, const char* interface){
+	int i = 0;
+	for (i = 0; i < NUM_INTERFACES; i++){
+		if (!strcmp(router->if_list[i].name, interface)){
+			return i;
+		}
+	}
+	return -1;
 }
