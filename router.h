@@ -45,15 +45,14 @@ typedef struct Router{
 	
 	node_t* arp_cache;///> a linked list showing ARP cache
 	node_t* arp_queue;///> a linked list for ARP queue
+	node_t* rtable;///>a linked list for routing table
 	
 	pthread_rwlock_t lock_arp_cache; ///> access lock for ARP cache
 	pthread_rwlock_t lock_arp_queue;///> access lock for ARP queue
 	pthread_rwlock_t lock_rtable;///> access lock for routing table
 	pthread_mutex_t lock_send;///> lock for sending packets
 	
-	pthread_t arp_thread;///>ARP thread
-	
-	
+	pthread_t arp_thread;///>ARP thread	
 } router_t;
 
 

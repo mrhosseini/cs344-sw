@@ -9,6 +9,7 @@
 #include "router.h"
 #include "arp.h"
 #include "pwospf.h"
+#include "ICMP.h"
 
 
 #include <stdlib.h>
@@ -55,7 +56,7 @@ void ip_processPacket(struct sr_instance* sr, const uint8_t * packet, unsigned i
 				break;
 			case IP_PROTO_ICMP:
 				printf("\n\tPacket IP Proto : ICMP, processing ...");
-// 				process_icmp_packet(sr, packet, len, interface);//TODO
+				icmp_processPacket(sr, packet, len, interface);
 				break;
 			case IP_PROTO_PWOSPF:
 				printf("\n\tPacket IP Proto : PWOSPF, processing ...");
@@ -234,4 +235,53 @@ int ip_verifyChecksum(uint8_t *data, unsigned int data_length){
 
 ip_header_t* ip_getHeader(const uint8_t* packet){
 	return (ip_header_t*)(&packet[ETH_HDR_LEN]);
+}
+
+
+/**
+ * @return the host order checksum for the given packet
+ */
+uint16_t ip_checksum(ip_header_t* iphdr){
+	iphdr->ip_sum = 0;
+	unsigned long sum = 0;
+	uint16_t s_sum = 0;
+	int numShorts = iphdr->ip_hl * 2;
+	int i = 0;
+	uint16_t* s_ptr = (uint16_t*)iphdr;
+	
+	for (i = 0; i < numShorts; ++i) {
+		/* sum all except checksum field */
+		if (i != 5) {
+			sum += ntohs(*s_ptr);
+		}
+		++s_ptr;
+	}
+	
+	/* sum carries */
+	sum = (sum >> 16) + (sum & 0xFFFF);
+	sum += (sum >> 16);
+	
+	/* ones compliment */
+	s_sum = sum & 0xFFFF;
+	s_sum = (~s_sum);
+	
+	return s_sum;
+}
+
+/**
+ * Populates an IP header with the usual data.  Note source_ip and dest_ip must be passed into
+ * the function in network byte order.
+ */
+void ip_createHeader(ip_header_t* ip, uint16_t payload_size, uint8_t protocol, uint32_t source_ip, uint32_t dest_ip){
+	bzero(ip, sizeof(ip_header_t));
+	ip->ip_hl = 5;
+	ip->ip_v = 4;
+	
+	ip->ip_off = htons(IP_FRAG_DF);
+	
+	ip->ip_len = htons(20 + payload_size);
+	ip->ip_ttl = 0x40;
+	ip->ip_p = protocol;
+	ip->ip_src.s_addr = source_ip;
+	ip->ip_dst.s_addr = dest_ip;
 }

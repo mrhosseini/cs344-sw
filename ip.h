@@ -44,4 +44,8 @@ ip_header_t* ip_getHeader(const uint8_t* packet);
 
 void ip_processPacket(struct sr_instance* sr, const uint8_t * packet, unsigned int len, const char* interface);
 
+uint16_t ip_checksum(ip_header_t* iphdr);
+
+void ip_createHeader(ip_header_t* ip, uint16_t payload_size, uint8_t protocol, uint32_t source_ip, uint32_t dest_ip);
+
 #endif
