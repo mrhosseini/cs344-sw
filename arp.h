@@ -21,6 +21,7 @@
 
 #define ARP_REQUEST_INTERVAL	1 //seconds
 #define ARP_MAX_REQUESTS	5
+#define ARP_TIMEOUT		300 //seconds
 
 typedef struct Arp_Header{
 	unsigned short  arp_hrd;             /* format of hardware address   */
@@ -95,6 +96,10 @@ void arp_qAdd(struct sr_instance* sr, uint8_t* packet, unsigned int len, const c
 void arp_checkQueue(struct sr_instance* sr, struct in_addr* dest_ip, unsigned char* dest_mac);
 
 void arp_processQueue(struct sr_instance* sr);
+
+void arp_expireCache(struct sr_instance* sr);
+
+void* arp_thread(void *param);
 	
 #endif
 

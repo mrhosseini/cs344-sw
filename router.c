@@ -18,6 +18,8 @@
 #include "functions.h"
 #include "ethernet.h"
 #include "arp.h"
+#include "ip.h"
+
 
 #include <stdlib.h>
 #include <string.h>
@@ -104,6 +106,11 @@ int router_init(struct sr_instance* sr){
 		exit(1);
 	}
 	
+	if (pthread_rwlock_init(&router->lock_rtable, NULL) != 0) {
+		perror("Lock init error");
+		exit(1);
+	}
+	
 	/*
 	 * register with the global instance
 	 */
@@ -139,6 +146,13 @@ int router_init(struct sr_instance* sr){
 	#endif
 	
 	/*
+	 * create ARP thread
+	 */
+	if (pthread_create(&router->arp_thread, NULL, arp_thread, (void *)sr) != 0){
+		perror("ARP thread create error");
+	}
+	
+	/*
 	 * save a pointer to global instance
 	 */
 	router->sr = sr;
@@ -151,7 +165,6 @@ int router_processPacket(struct sr_instance* sr, const uint8_t* packet, int len,
 	/*
 	 * check ethernet header type
 	 */
-	
 	int i = 0;
 	printf("\n");
 	for (i = 0; i < 6 + 6 + 2; i++){
@@ -166,11 +179,11 @@ int router_processPacket(struct sr_instance* sr, const uint8_t* packet, int len,
 			break;
 		case ETH_TYPE_IP:
 			printf("\nPacket Type: IP,  length: %d, Interface: %s",len, interface);
+			ip_processPacket(sr, packet, len, interface);
 			break;
 		default:
-			printf("\nPacket Type: UNKNOWN, length: %d, Interface: %s",len, interface);
-	}
-	
+			printf("\nPacket Type: %X (UNKNOWN), length: %d, Interface: %s",eth_type, len, interface);
+	}	
 	return 0;
 }
 
@@ -279,6 +292,17 @@ int router_getInterfaceIndex(router_t* router, const char* interface){
 	int i = 0;
 	for (i = 0; i < NUM_INTERFACES; i++){
 		if (!strcmp(router->if_list[i].name, interface)){
+			return i;
+		}
+	}
+	return -1;
+}
+
+
+int router_getInterfaceByIp(router_t* router, uint32_t ip){
+	int i = 0;
+	for (i = 0; i < NUM_INTERFACES; i++){
+		if (router->if_list[i].ip == ip){
 			return i;
 		}
 	}

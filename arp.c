@@ -476,7 +476,6 @@ void arp_processQueue(struct sr_instance* sr) {
 				 */
 				time(&(aqi->last_req_time));
 				++(aqi->requests);
-// 				send_arp_request(sr, aqe->next_hop.s_addr, aqe->out_iface_name);
 				arp_sendRequest(sr, aqi->next_hop.s_addr, aqi->out_iface_name);
 			} else {
 				/*
@@ -547,7 +546,7 @@ void* arp_thread(void *param) {
 	
 	while (1) {
 		router_lockWrite(&router->lock_arp_cache);
-// 		expire_arp_cache(sr);//TODO
+		arp_expireCache(sr);
 		router_unlock(&router->lock_arp_cache);		
 		
 		
@@ -565,3 +564,43 @@ void* arp_thread(void *param) {
 	}
 }
 
+void arp_expireCache(struct sr_instance* sr){
+	assert(sr);
+	router_t* router = (router_t*) sr_get_subsystem(sr);
+	node_t* arp_walker = 0;
+	arp_item_t* arp_item = 0;
+	time_t now;
+	double diff;
+	int timedout_entry = 0;
+	
+	
+	/*
+	 * iterate through arp_cache to find expired entries
+	 */
+	arp_walker = router->arp_cache;
+	while(arp_walker) {
+		arp_item = (arp_item_t *)arp_walker->data;
+		node_t* tmp = arp_walker;
+		arp_walker = arp_walker->next;
+		
+		/*
+		 * if not static, check that TTL is within reason 
+		 */
+		if (arp_item->is_static != 1) {
+			time(&now);
+			diff = difftime(now, arp_item->ttl);
+			
+			if (diff > ARP_TIMEOUT) {
+				node_remove(&router->arp_cache, tmp);
+				timedout_entry = 1;
+			}
+		}
+	}
+	
+	/* 
+	 * update hw
+	 */
+	if (timedout_entry == 1) {
+		arp_updateHw(router);
+	}
+}

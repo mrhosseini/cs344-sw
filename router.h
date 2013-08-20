@@ -40,12 +40,18 @@ typedef struct Router{
 	struct sr_instance* sr;///>pointer to base system simple router
 	int32_t if_list_index; ///>index of active interface
 	interface_t if_list[NUM_INTERFACES]; ///>list of interfaces of router
-	int sockfd[NUM_INTERFACES];
-	struct nf2device netfpga;
-	node_t* arp_cache;
-	node_t* arp_queue;
-	pthread_rwlock_t lock_arp_cache;
-	pthread_rwlock_t lock_arp_queue;
+	int sockfd[NUM_INTERFACES]; ///>sockets to read from and write to nf devices
+	struct nf2device netfpga; ///>NetFPGA device
+	
+	node_t* arp_cache;///> a linked list showing ARP cache
+	node_t* arp_queue;///> a linked list for ARP queue
+	
+	pthread_rwlock_t lock_arp_cache; ///> access lock for ARP cache
+	pthread_rwlock_t lock_arp_queue;///> access lock for ARP queue
+	pthread_rwlock_t lock_rtable;///> access lock for routing table
+	
+	pthread_t arp_thread;///>ARP thread
+	
 	
 } router_t;
 
@@ -67,6 +73,8 @@ int router_unlock(pthread_rwlock_t* lock);
 int router_ip2mac(struct sr_instance* sr, uint8_t* packet, unsigned int len, struct in_addr* next_hop, const char* out_iface);
 
 int router_getInterfaceIndex(router_t* router, const char* interface);
+
+int router_getInterfaceByIp(router_t* router, uint32_t ip);
 
 
 #endif
