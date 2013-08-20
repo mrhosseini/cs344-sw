@@ -96,6 +96,15 @@ int router_init(struct sr_instance* sr){
 	router->arp_cache = NULL;
 	router->arp_queue = NULL;
 	
+	
+	/*
+	 * initialize locks
+	 */
+	if (pthread_mutex_init(&router->lock_send, NULL) != 0) {
+		perror("Lock init error");
+		exit(1);
+	}
+	
 	if (pthread_rwlock_init(&router->lock_arp_cache, NULL) != 0) {
 		perror("Lock init error");
 		exit(1);
@@ -189,11 +198,11 @@ int router_processPacket(struct sr_instance* sr, const uint8_t* packet, int len,
 
 
 int router_sendPacket(struct sr_instance* sr, uint8_t* packet, unsigned int len, const char* interface) {
-// 	router_t* router = sr_get_subsystem(sr);
-// 	if (pthread_mutex_lock(rs->write_lock) != 0) {
-// 		perror("Failure locking write lock\n");
-// 		exit(1);
-// 	}TODO: lock
+	router_t* router = sr_get_subsystem(sr);
+	if (pthread_mutex_lock(&router->lock_send) != 0) {
+		perror("Failure locking write lock\n");
+		exit(1);
+	}
 	
 	int result = 0;
 	
@@ -222,10 +231,10 @@ int router_sendPacket(struct sr_instance* sr, uint8_t* packet, unsigned int len,
 	 * print_packet(packet, len);
 	 */
 	
-// 	if (pthread_mutex_unlock(rs->write_lock) != 0) {
-// 		perror("Failure unlocking write lock\n");
-// 		exit(1);
-// 	}TODO: unlock
+	if (pthread_mutex_unlock(&router->lock_send) != 0) {
+		perror("Failure unlocking write lock\n");
+		exit(1);
+	}
 	
 	return result;
 }

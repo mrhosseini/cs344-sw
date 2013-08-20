@@ -49,6 +49,7 @@ typedef struct Router{
 	pthread_rwlock_t lock_arp_cache; ///> access lock for ARP cache
 	pthread_rwlock_t lock_arp_queue;///> access lock for ARP queue
 	pthread_rwlock_t lock_rtable;///> access lock for routing table
+	pthread_mutex_t lock_send;///> lock for sending packets
 	
 	pthread_t arp_thread;///>ARP thread
 	
