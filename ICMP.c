@@ -20,6 +20,11 @@
 
 void icmp_processPacket(struct sr_instance* sr, const uint8_t * packet, unsigned int len, const char* interface){
 	icmp_header_t* icmp_hdr = icmp_getHeader(packet);
+	printf("\n\tICMP packet:  ");
+	int i = 0;
+	for (i = 0; i < 16; i++){
+		printf("%02X ", ((uint8_t*)icmp_hdr)[i]);
+	}
 	if (icmp_hdr->icmp_type == ICMP_TYPE_ECHO_REQUEST){
 		printf("\n\t\tICMP Type: Echo Request, sending reply ...");
 		icmp_sendPacket(sr, packet, len, ICMP_TYPE_ECHO_REPLY, ICMP_CODE_ECHO);
@@ -43,7 +48,7 @@ icmp_header_t* icmp_getHeader(const uint8_t* packet){
  * @returns 0 on success, 1 on failure
  */
 int icmp_sendPacket(struct sr_instance* sr, const uint8_t* src_packet, unsigned int len, uint8_t icmp_type, uint8_t icmp_code){
-	
+	printf("\n sending ICMP packet type = %d, code = %d, len = %d\n", icmp_type, icmp_code, len);
 	router_t* router = sr_get_subsystem(sr);
 	
 	int new_packet_len;
@@ -162,6 +167,7 @@ uint16_t icmp_checksum(icmp_header_t* icmp, int payload_len){
 
 
 void icmp_processEchoReply(struct sr_instance* sr, const uint8_t* packet, unsigned int len){
+	printf("\n **in icmp_processEchoReply");
 	/*
 	 * NOTE: no ping support currently
 	 */

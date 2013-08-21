@@ -9,6 +9,7 @@
 #include "sr_base_internal.h"
 #include "router.h"
 #include "ll.h"
+#include "netfpga.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -115,7 +116,8 @@ void rtable_init(struct sr_instance* sr){
 		char* mask = NULL;
 		char* iface = NULL;
 		if (sscanf(buf, "%as %as %as %as", &ip, &gw, &mask, &iface) != 4) {
-			printf("Failure reading from rtable file\n");
+			printf("ignoring incorrect line in rtable file\n");
+			continue;
 		}
 		
 		rtable_row_t* row = (rtable_row_t*) malloc(sizeof(rtable_row_t));
@@ -161,6 +163,7 @@ void rtable_init(struct sr_instance* sr){
 	if (fclose(file) != 0) {
 		perror("Failure closing file");
 	}
+	netfpga_writeRTable(&router->netfpga, router->rtable);
 	
 	/* check if we have a default route entry, if so we need to add it to our pwospf router */
 // 	pwospf_interface* default_route = default_route_present(rs); //TODO

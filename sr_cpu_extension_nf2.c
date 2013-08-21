@@ -177,7 +177,7 @@ int sr_cpu_input(struct sr_instance* sr)
 		
 		for (i = 0; i < NUM_INTERFACES; ++i) {
 			if (FD_ISSET(router->sockfd[i], &read_set)) {
-				printf("\n Something on %s \n", internal_names[i]);
+				printf("\n\n Something on %s \n", internal_names[i]);
 				// assume each read is a full packet
 				int read_bytes = read(router->sockfd[i], readBuf, READ_BUF_SIZE);
 				
@@ -233,7 +233,6 @@ int sr_cpu_output(struct sr_instance* sr /* borrowed */,
 	
 	fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 	fprintf(stderr, "!!! sr_cpu_output(..) (sr_cpu_extension_nf2.c) called while running in cpu mode !!!\n");
-	fprintf(stderr, "!!! you need to implement this function to write to the hardware                !!!\n");
 	fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
 	
 	router_t* router = sr_get_subsystem(sr);

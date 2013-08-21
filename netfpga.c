@@ -99,7 +99,6 @@ int netfpga_initInterfaces(router_t* router, interface_t* interface){
 
 
 void netfpga_writeArpCacheItem(struct nf2device* netfpga, arp_item_t* arp_item, int row){
-	
 	if(arp_item != NULL) {
 		unsigned int mac_hi = 0;
 		unsigned int mac_lo = 0;
@@ -139,6 +138,7 @@ void netfpga_writeArpCacheItem(struct nf2device* netfpga, arp_item_t* arp_item, 
 }
 
 void netfpga_writeRTable(struct nf2device* netfpga, node_t* rtable_head){
+	printf("\n Writing rtable in hardware\n");
 	/*
 	 * naively iterate through the 32 slots in hardware updating all entries 
 	 */
