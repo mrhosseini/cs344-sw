@@ -28,8 +28,7 @@
 #define ICMP_CODE_TTL_EXCEEDED			0x0
 
 
-typedef struct ICMP_Header
-{
+typedef struct ICMP_Header{
 	uint8_t icmp_type;
 	uint8_t icmp_code;
 	uint16_t icmp_sum;

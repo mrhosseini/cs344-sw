@@ -58,7 +58,6 @@ int router_init(struct sr_instance* sr){
 	/*
 	 * init sockets
 	 */
-	//struct sr_instance* sr = (struct sr_instance*)rs->sr;
 	int base = 0;
 	
 	char iface_name[32] = "nf2c";

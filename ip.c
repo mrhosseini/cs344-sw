@@ -10,6 +10,7 @@
 #include "arp.h"
 #include "pwospf.h"
 #include "ICMP.h"
+#include "rtable.h"
 
 
 #include <stdlib.h>
@@ -21,10 +22,7 @@
 
 
 void ip_processPacket(struct sr_instance* sr, const uint8_t * packet, unsigned int len, const char* interface){
-	
-// 	router_state *rs = get_router_state(sr);
 	router_t* router = (router_t*) sr_get_subsystem(sr);
-	
 	
 	/*
 	 * Check if the packet is invalid, if so drop it 
@@ -50,9 +48,10 @@ void ip_processPacket(struct sr_instance* sr, const uint8_t * packet, unsigned i
 				 * We don't accept TCP
 				 * If TCP, send ICMP reply port unreachable
 				 */
-				printf("\n\tPacket IP Proto : TCP, sending to transport layer");
-// 				sr_transport_input((uint8_t *)ip_hdr);
-				//TODO
+				printf("\n\tPacket IP Proto : TCP, sending ICMP Port Unreachable");
+				if (icmp_sendPacket(sr, packet, len, ICMP_TYPE_DESTINATION_UNREACHABLE, ICMP_CODE_PROTOCOL_UNREACHABLE) != 0){
+					printf("Failure sending icmp reply\n");
+				}
 				break;
 			case IP_PROTO_ICMP:
 				printf("\n\tPacket IP Proto : ICMP, processing ...");
@@ -67,104 +66,95 @@ void ip_processPacket(struct sr_instance* sr, const uint8_t * packet, unsigned i
 				 * We don't accept UDP so ICMP reply port unreachable
 				 */
 				printf("\n\tPacket IP Proto : UDP, sending ICMP Port Unreachable");
-// 				if (send_icmp_packet(sr, packet, len, ICMP_TYPE_DESTINATION_UNREACHABLE, ICMP_CODE_PORT_UNREACHABLE) != 0) { //TODO
-// 					printf("Failure sending icmp reply\n");
-// 				}
+				if (icmp_sendPacket(sr, packet, len, ICMP_TYPE_DESTINATION_UNREACHABLE, ICMP_CODE_PORT_UNREACHABLE) != 0){
+					printf("Failure sending icmp reply\n");
+				}
 				break;
 			default:
 				/*
 				 * If other? return ICMP protocol unreachable 
 				 */
 				printf("\n\tUnknown protocol, sending ICMP unreachable");
-// 				if (send_icmp_packet(sr, packet, len, ICMP_TYPE_DESTINATION_UNREACHABLE, ICMP_CODE_PROTOCOL_UNREACHABLE) != 0) {//TODO
-// 					//printf("Failure sending icmp reply\n");
-// 				}
+				if (icmp_sendPacket(sr, packet, len, ICMP_TYPE_DESTINATION_UNREACHABLE, ICMP_CODE_PROTOCOL_UNREACHABLE) != 0){
+					printf("Failure sending icmp reply\n");
+				}
 				break;
 		}
-	} else if (ip_hdr->ip_dst.s_addr == htonl(PWOSPF_HELLO_TIP)) {
+	}
+	else if (ip_hdr->ip_dst.s_addr == htonl(PWOSPF_HELLO_TIP)) {
 		/*
 		 * if the packet is destined to the PWOSPF address then process it 
 		 */
 // 		process_pwospf_packet(sr, packet, len, interface);//TODO
-	} else {
+	} 
+	else {
 		/*
 		 * Need to forward this packet to another host 
 		 */
 		
-		//TODO: lpm and forwarding process
-		
-// 		struct in_addr next_hop;
-// 		char next_hop_iface[IF_LEN];
-// 		bzero(next_hop_iface, IF_LEN);
-// 		
-// 		
-// 		/* is there an entry in our routing table for the destination? */
-// 		if(get_next_hop(&next_hop, next_hop_iface, IF_LEN,
-// 			rs,
-// 		  &((get_ip_hdr(packet, len))->ip_dst))) {
-// 			
-// 			/* send ICMP no route to host */
-// 			uint8_t icmp_type = ICMP_TYPE_DESTINATION_UNREACHABLE;
-// 			uint8_t icmp_code = ICMP_CODE_NET_UNKNOWN;
-// 			send_icmp_packet(sr, packet, len, icmp_type, icmp_code);
-// 		  }	else {
-// 			  
-// 			  
-// 			  if(strncmp(interface, next_hop_iface, IF_LEN) == 0){
-// 				  /* send ICMP net unreachable */
-// 				  uint8_t icmp_type = ICMP_TYPE_DESTINATION_UNREACHABLE;
-// 				  uint8_t icmp_code = ICMP_CODE_NET_UNREACHABLE;
-// 				  send_icmp_packet(sr, packet, len, icmp_type, icmp_code);
-// 			  }
-// 			  else {
-// 				  
-// 				  /* check for outgoing interface is WAN */
-// 				  iface_entry* iface = get_iface(rs, next_hop_iface);
-// 				  if(iface->is_wan) {
-// 					  
-// 					  lock_nat_table(rs);
-// 					  process_nat_int_packet(rs, packet, len, iface->ip);
-// 					  unlock_nat_table(rs);
-// 				  }
-// 				  
-// 				  ip_hdr *ip = get_ip_hdr(packet, len);
-// 				  
-// 				  /* is ttl < 1? */
-// 				  if(ip->ip_ttl == 1) {
-// 					  
-// 					  /* send ICMP time exceeded */
-// 					  uint8_t icmp_type = ICMP_TYPE_TIME_EXCEEDED;
-// 					  uint8_t icmp_code = ICMP_CODE_TTL_EXCEEDED;
-// 					  send_icmp_packet(sr, packet, len, icmp_type, icmp_code);
-// 					  
-// 				  } else {
-// 					  /* decrement ttl */
-// 					  ip->ip_ttl--;
-// 					  
-// 					  /* recalculate checksum */
-// 					  bzero(&ip->ip_sum, sizeof(uint16_t));
-// 					  uint16_t checksum = htons(compute_ip_checksum(ip));
-// 					  ip->ip_sum = checksum;
-// 					  
-// 					  eth_hdr *eth = (eth_hdr *)packet;
-// 					  iface_entry* sr_if = get_iface(rs, next_hop_iface);
-// 					  assert(sr_if);
-// 					  
-// 					  /* update the eth header */
-// 					  populate_eth_hdr(eth, NULL, sr_if->addr, ETH_TYPE_IP);
-// 					  
-// 					  /* duplicate this packet here because the memory will be freed
-// 					   * by send_ip, and our copy of the packet is only on loan
-// 					   */
-// 					  
-// 					  uint8_t* packet_copy = (uint8_t*)malloc(len);
-// 					  memcpy(packet_copy, packet, len);
-// 					  
-// 					  /* forward packet out the next hop interface */
-// 					  send_ip(sr, packet_copy, len, &(next_hop), next_hop_iface);
-// 				}
-// 			} /* end of strncmp(interface ... */
-// 		} /* end of if(get_next_hop) */
+		struct in_addr next_hop;
+		int next_hop_ifIndex = 0;
+
+		/*
+		 * is there an entry in our routing table for the destination? 
+		 */
+		if (rtable_nextHop(router, &ip_hdr->ip_dst, &next_hop, &next_hop_ifIndex) != 0){
+			/* 
+			 * send ICMP no route to host 
+			 */
+			icmp_sendPacket(sr, packet, len, ICMP_TYPE_DESTINATION_UNREACHABLE, ICMP_CODE_NET_UNKNOWN);
+		} 
+		else if (strcmp(interface, router->if_list[next_hop_ifIndex].name)){
+			/*
+			 * send ICMP net unreachable 
+			 */
+			icmp_sendPacket(sr, packet, len, ICMP_TYPE_DESTINATION_UNREACHABLE, ICMP_CODE_NET_UNREACHABLE);
+		}
+		else{
+			/*
+			 * check ttl to see if is ttl < 1? 
+			 */
+			if (ip_hdr->ip_ttl == 1){
+				/*
+				 * send ICMP time exceeded 
+				 */
+				icmp_sendPacket(sr, packet, len, ICMP_TYPE_TIME_EXCEEDED, ICMP_CODE_TTL_EXCEEDED);
+				
+			}
+			else{
+				/* 
+				 * decrement ttl 
+				 */
+				ip_hdr->ip_ttl--;
+				
+				/*
+				 * recalculate checksum 
+				 */
+				bzero(&ip_hdr->ip_sum, sizeof(uint16_t));
+				uint16_t checksum = htons(ip_checksum(ip_hdr));
+				ip_hdr->ip_sum = checksum;
+				
+				/*
+				 * update the eth header 
+				 */
+				eth_header_t* eth = (eth_header_t*) packet;
+				eth_createHeader(eth, NULL, router->if_list[next_hop_ifIndex].addr, ETH_TYPE_IP);
+				
+				/* 
+				 * duplicate this packet here because the memory will be freed
+				 * by router_ip2mac, and our copy of the packet is only on loan
+				 */
+				
+				uint8_t* packet_copy = (uint8_t*) malloc(len);
+				memcpy(packet_copy, packet, len);
+				
+				/*
+				 * forward packet out the next hop interface 
+				 * (sending to link layer)
+				 */
+				router_ip2mac(sr, packet_copy, len, &(next_hop), router->if_list[next_hop_ifIndex].name);
+			}
+		}
 	}
 	
 	router_unlock(&router->lock_rtable);
@@ -250,18 +240,24 @@ uint16_t ip_checksum(ip_header_t* iphdr){
 	uint16_t* s_ptr = (uint16_t*)iphdr;
 	
 	for (i = 0; i < numShorts; ++i) {
-		/* sum all except checksum field */
+		/* 
+		 * sum all except checksum field 
+		 */
 		if (i != 5) {
 			sum += ntohs(*s_ptr);
 		}
 		++s_ptr;
 	}
 	
-	/* sum carries */
+	/*
+	 * sum carries 
+	 */
 	sum = (sum >> 16) + (sum & 0xFFFF);
 	sum += (sum >> 16);
 	
-	/* ones compliment */
+	/* 
+	 * ones compliment 
+	 */
 	s_sum = sum & 0xFFFF;
 	s_sum = (~s_sum);
 	

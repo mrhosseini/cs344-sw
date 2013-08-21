@@ -8,6 +8,8 @@
 #include "ll.h"
 #include "reg_defines.h"
 #include "netfpga.h"
+#include "ip.h"
+#include "ICMP.h"
 
 
 #include <stdio.h>
@@ -58,9 +60,6 @@ void arp_processRequest(struct sr_instance *sr, const uint8_t *packet, unsigned 
 	
 	arp_header_t* arp_hdr = arp_getHeader(packet);
 	
-	/* get interface list read lock */
-	//lock_if_list_rd(rs);TODO: lock if_list
-	
 	router_t* router = (router_t*) sr_get_subsystem(sr);
 	
 	/* scan the interface list
@@ -74,9 +73,6 @@ void arp_processRequest(struct sr_instance *sr, const uint8_t *packet, unsigned 
 			break;
 		}
 	}
-	
-	/* release the interface list lock */
-// 	unlock_if_list(rs);
 }
 
 
@@ -457,8 +453,6 @@ void arp_processQueue(struct sr_instance* sr) {
 	
 	while (n) {
 		next = n->next;
-		
-// 		arp_queue_entry* aqe = (arp_queue_entry*)n->data;
 		arp_qi_t* aqi = (arp_qi_t*) n->data;
 		
 		/*
@@ -488,38 +482,34 @@ void arp_processQueue(struct sr_instance* sr) {
 					/*
 					 * send icmp for the packet, free it, and its encasing entry 
 					 */
-// 					arp_queue_packet_entry* aqpe = (arp_queue_packet_entry*)cur_packet_node->data;
 					arp_qp_t* aqp = (arp_qp_t*) cur_packet_node->data;
-					
-					//TODO: send ICMP_TYPE_DESTINATION_UNREACHABLE
 					
 					/* only send an icmp error if the packet is not icmp, or if it is, its an echo request or reply
 					 * also ensure we don't send an icmp error back to one of our interfaces
 					 */
-// 					if ((get_ip_hdr(aqpe->packet, aqpe->len)->ip_p != IP_PROTO_ICMP) ||
-// 						(get_icmp_hdr(aqpe->packet, aqpe->len)->icmp_type == ICMP_TYPE_ECHO_REPLY) ||
-// 						(get_icmp_hdr(aqpe->packet, aqpe->len)->icmp_type == ICMP_TYPE_ECHO_REQUEST)) {
-// 						
-// 						/* also ensure we don't send an icmp error back to one of our interfaces */
-// 						if (!iface_match_ip(rs, get_ip_hdr(aqpe->packet, aqpe->len)->ip_src.s_addr)) {
-// 							/* Total hack here to increment the TTL since we already decremented it earlier in the pipeline
-// 							 * and the ICMP error should return the original packet.
-// 							 * TODO: Don't decrement the TTL until the packet is ready to be put on the wire
-// 							 * and we have the next hop ARP address, although checking should be done
-// 							 * where it is currently being decremented to minimize effort on a doomed packet */
-// 							ip_hdr *ip = get_ip_hdr(aqpe->packet, aqpe->len);
-// 							if (ip->ip_ttl < 255) {
-// 								ip->ip_ttl++;
-// 								
-// 								/* recalculate checksum */
-// 								bzero(&ip->ip_sum, sizeof(uint16_t));
-// 								uint16_t checksum = htons(compute_ip_checksum(ip));
-// 								ip->ip_sum = checksum;
-// 							}
-// 							
-// 							send_icmp_packet(sr, aqpe->packet, aqpe->len, ICMP_TYPE_DESTINATION_UNREACHABLE, ICMP_CODE_HOST_UNREACHABLE);
-// 						}
-// 					}
+					ip_header_t* ip_hdr = ip_getHeader(aqp->packet);
+					icmp_header_t* icmp_hdr = icmp_getHeader(aqp->packet);
+					if ( ip_hdr->ip_p != IP_PROTO_ICMP || icmp_hdr->icmp_type == ICMP_TYPE_ECHO_REPLY || icmp_hdr->icmp_type == ICMP_TYPE_ECHO_REQUEST){
+						
+						/*
+						 * also ensure we don't send an icmp error back to one of our interfaces 
+						 */
+						if (router_getInterfaceByIp(router, ip_hdr->ip_src.s_addr) >= 0){
+							/* Total hack here to increment the TTL since we already decremented it earlier in the pipeline
+							 * and the ICMP error should return the original packet. 
+							 */
+
+							if (ip_hdr->ip_ttl < 255) {
+								ip_hdr->ip_ttl++;
+								
+								/* recalculate checksum */
+								bzero(&ip_hdr->ip_sum, sizeof(uint16_t));
+								uint16_t checksum = htons(ip_checksum(ip_hdr));
+								ip_hdr->ip_sum = checksum;
+							}
+							icmp_sendPacket(sr, aqp->packet, aqp->len, ICMP_TYPE_DESTINATION_UNREACHABLE, ICMP_CODE_HOST_UNREACHABLE);
+						}
+					}
 						
 					free(aqp->packet);
 					next_packet_node = cur_packet_node->next;
@@ -552,11 +542,11 @@ void* arp_thread(void *param) {
 		
 		router_lockRead(&router->lock_arp_cache);
 		router_lockWrite(&router->lock_arp_queue);
-// 		lock_rtable_rd(rs); /* because we may send an icmp packet back, requiring get next hop */		TODO
+		router_lockRead(&router->lock_rtable); /* because we may send an icmp packet back, requiring get next hop */
 		
 		arp_processQueue(sr);
 		
-// 		unlock_rtable(rs);//TODO
+		router_unlock(&router->lock_rtable);
 		router_unlock(&router->lock_arp_queue);
 		router_unlock(&router->lock_arp_cache);
 		

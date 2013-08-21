@@ -162,11 +162,14 @@ uint16_t icmp_checksum(icmp_header_t* icmp, int payload_len){
 
 
 void icmp_processEchoReply(struct sr_instance* sr, const uint8_t* packet, unsigned int len){
+	/*
+	 * NOTE: no ping support currently
+	 */
 	
 // 	router_t* router = (router_t* router) sr_get_subsystem(sr);
 // 	
 // 	/*
-// 	 * Create an entry in the sping queue for this echo reply  //TODO
+// 	 * Create an entry in the sping queue for this echo reply  
 // 	 */
 // 	sping_queue_entry *sping_entry = calloc(1, sizeof(sping_queue_entry));
 // 	sping_entry->packet = calloc(len, sizeof(uint8_t));
