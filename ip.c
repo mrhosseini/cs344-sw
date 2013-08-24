@@ -40,6 +40,27 @@ void ip_processPacket(struct sr_instance* sr, const uint8_t * packet, unsigned i
 	 * Check if the packet is headed to one of our interfaces 
 	 */
 	ip_header_t* ip_hdr = ip_getHeader(packet);
+	
+	printf("\n\n\tIP Header: ");
+	printf("\n\t\tHeader len: %d",ip_hdr->ip_hl);
+	printf("\n\t\tVersion: %d",ip_hdr->ip_v);
+	printf("\n\t\tTOS: %d",ip_hdr->ip_tos);
+	printf("\n\t\ttotal len: %d",ntohs(ip_hdr->ip_len));
+	printf("\n\t\tID: %d",ip_hdr->ip_id);
+	printf("\n\t\tOffset: %d",ip_hdr->ip_off);
+	printf("\n\t\tTTL: %d",ip_hdr->ip_ttl);
+	printf("\n\t\tProtocol: %d",ip_hdr->ip_p);
+	printf("\n\t\tChecksum: %04X",ip_hdr->ip_sum);
+	
+	char ip_string[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &ip_hdr->ip_src, ip_string, INET_ADDRSTRLEN);
+	printf("\n\t\tSource: %s",ip_string);
+	
+	inet_ntop(AF_INET, &ip_hdr->ip_dst, ip_string, INET_ADDRSTRLEN);
+	printf("\n\t\tDestination: %s",ip_string);
+	
+	printf("\n\n");
+	
 	int if_index = router_getInterfaceByIp(router, ip_hdr->ip_dst.s_addr);
 	if (if_index >= 0){
 		switch (ip_hdr->ip_p) {
@@ -224,7 +245,8 @@ int ip_verifyChecksum(uint8_t *data, unsigned int data_length){
 }
 
 ip_header_t* ip_getHeader(const uint8_t* packet){
-	return (ip_header_t*)(&packet[ETH_HDR_LEN]);
+	ip_header_t* ip_hdr = (ip_header_t*)(&packet[ETH_HDR_LEN]);
+	return ip_hdr;
 }
 
 

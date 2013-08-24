@@ -17,12 +17,7 @@ uint16_t eth_getType(const uint8_t* packet){
 	 * type is network byte order
 	 */
 	uint16_t type;
-	//uint16_t type = *(uint16_t*)(&packet[ETH_ADDR_LEN + ETH_ADDR_LEN]);
 	memcpy((uint8_t*)&type, &packet[ETH_ADDR_LEN * 2], 2);
-	
-// 	printf("\n type = %02X ", ((uint8_t*)&type)[0]);
-	// 	type = htonl(type);
-// 	printf("\n type = %02X ", ((uint8_t*)&type)[1]);
 	return ntohs(type);
 }
 

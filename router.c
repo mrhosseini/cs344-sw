@@ -36,9 +36,6 @@
 #include <linux/if_ether.h>
 #include <linux/if_packet.h>
 
-volatile int lock_debug = 0;
-
-
 
 void router_initInterfaces(router_t* router, interface_t *interface, struct sr_vns_if vns_if){
 	printf(" ** if_init(..) called \n");
@@ -175,27 +172,37 @@ int router_processPacket(struct sr_instance* sr, const uint8_t* packet, int len,
 	/*
 	 * check ethernet header type
 	 */
-	int i = 0;
 	uint16_t eth_type = eth_getType(packet);
-	if (lock_debug == 0){
-		switch(eth_type){
-			case ETH_TYPE_ARP:
-				printf("\n");
-				for (i = 0; i < 6 + 6 + 2; i++){
-					printf("%02X ", packet[i]);
-				}
-				printf("\n");
-// 				lock_debug = 1;
-				printf("\n Packet Type: ARP, length: %d, Interface: %s", len, interface);				
-				arp_processPacket(sr, packet, len, interface);
-				break;
-			case ETH_TYPE_IP:
-				printf("\n Packet Type: IP,  length: %d, Interface: %s",len, interface);
-				ip_processPacket(sr, packet, len, interface);
-				break;
-			default:
-				printf("\n Packet Type: %X (UNKNOWN), length: %d, Interface: %s",eth_type, len, interface);
-		}
+	
+	eth_header_t* eth_hdr = (eth_header_t*) packet;
+	int i = 0;
+	printf("\n\n\tEthernet Header: ");
+	printf("\n\t\tDestination: ");
+	for (i = 0; i < ETH_ADDR_LEN; i++){
+		if (i > 0)
+			printf(":");
+		printf("%02X",eth_hdr->d_addr[i]);
+	}
+	printf("\n\t\tSource: ");
+	for (i = 0; i < ETH_ADDR_LEN; i++){
+		if (i > 0)
+			printf(":");
+		printf("%02X",eth_hdr->d_addr[i]);
+	}
+	printf("\n\t\tType: %04X", eth_hdr->type);
+	printf("\n\n");
+	
+	switch(eth_type){
+		case ETH_TYPE_ARP:
+			printf("\n Packet Type: ARP, length: %d, Interface: %s", len, interface);				
+			arp_processPacket(sr, packet, len, interface);
+			break;
+		case ETH_TYPE_IP:
+			printf("\n Packet Type: IP,  length: %d, Interface: %s",len, interface);
+			ip_processPacket(sr, packet, len, interface);
+			break;
+		default:
+			printf("\n Packet Type: %X (UNKNOWN), length: %d, Interface: %s",eth_type, len, interface);
 	}
 	return 0;
 }

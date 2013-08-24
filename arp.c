@@ -31,6 +31,31 @@ void arp_processPacket(struct sr_instance *sr, const uint8_t *packet, unsigned i
 	assert(interface);
 	
 	arp_header_t* arp_hdr = arp_getHeader(packet);
+	printf("\n\n\tARP Header: ");
+	printf("\n\t\tHW Format: %d", arp_hdr->arp_hrd);
+	printf("\n\t\tPro Format: %d", arp_hdr->arp_pro);
+	printf("\n\t\tHW Addr len: %d", arp_hdr->arp_hln);
+	printf("\n\t\tPro Addr len: %d", arp_hdr->arp_pln);
+	printf("\n\t\tOpcode: %d", arp_hdr->arp_op);
+	printf("\n\t\tSender HW: ");
+	int i = 0;
+	for (i = 0; i < ETH_ADDR_LEN; i++){
+		if (i > 0)
+			printf(":");
+		printf("%02X",arp_hdr->arp_sha[i]);
+	}
+	char ip_string[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &arp_hdr->arp_sip, ip_string, INET_ADDRSTRLEN);
+	printf("\n\t\tSender IP: %s",ip_string);
+	printf("\n\t\tTarget HW: ");
+	for (i = 0; i < ETH_ADDR_LEN; i++){
+		if (i > 0)
+			printf(":");
+		printf("%02X",arp_hdr->arp_tha[i]);
+	}
+	inet_ntop(AF_INET, &arp_hdr->arp_tip, ip_string, INET_ADDRSTRLEN);
+	printf("\n\t\tTarget IP: %s",ip_string);
+	printf("\n\n");
 	
 	/*
 	 * arp_op is in network byte order

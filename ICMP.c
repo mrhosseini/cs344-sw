@@ -20,11 +20,12 @@
 
 void icmp_processPacket(struct sr_instance* sr, const uint8_t * packet, unsigned int len, const char* interface){
 	icmp_header_t* icmp_hdr = icmp_getHeader(packet);
-	printf("\n\tICMP packet:  ");
-	int i = 0;
-	for (i = 0; i < 16; i++){
-		printf("%02X ", ((uint8_t*)icmp_hdr)[i]);
-	}
+	printf("\n\n\tICMP Header: ");
+	printf("\n\t\tType: %d", icmp_hdr->icmp_type);
+	printf("\n\t\tCode: %d", icmp_hdr->icmp_code);
+	printf("\n\t\tChecksum: %04X", icmp_hdr->icmp_sum);
+	printf("\n\n");
+	
 	if (icmp_hdr->icmp_type == ICMP_TYPE_ECHO_REQUEST){
 		printf("\n\t\tICMP Type: Echo Request, sending reply ...");
 		icmp_sendPacket(sr, packet, len, ICMP_TYPE_ECHO_REPLY, ICMP_CODE_ECHO);
@@ -37,8 +38,8 @@ void icmp_processPacket(struct sr_instance* sr, const uint8_t * packet, unsigned
 
 
 icmp_header_t* icmp_getHeader(const uint8_t* packet){
-	ip_header_t* ip_hdr = ip_getHeader(packet);
-	return (icmp_header_t*)(&ip_hdr[sizeof(ip_header_t)]);
+	icmp_header_t* icmp_hdr = (icmp_header_t*) &packet[sizeof(ip_header_t) + sizeof(eth_header_t)];
+	return icmp_hdr;
 }
 
 /**
