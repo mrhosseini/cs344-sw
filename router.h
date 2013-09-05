@@ -14,6 +14,7 @@
 
 #include <stdint.h>
 #include <pthread.h>
+#include <time.h>
 
 
 ///number of hardware interfaces 
@@ -31,8 +32,16 @@ typedef struct Interface{
 	uint32_t speed;
 	char name[SR_NAMELEN];
 	unsigned char addr[PHY_ADDR_LEN];
+	node_t* neighbors;
+	time_t last_sent_hello;
 } interface_t;
 
+
+typedef struct nbr_router {
+	uint32_t router_id;	/* net byte order */
+	struct in_addr ip;	/* net byte order */
+	time_t last_rcvd_hello;
+} nbr_router_t;
 
 
 ///structure to handle router state
@@ -43,16 +52,36 @@ typedef struct Router{
 	int sockfd[NUM_INTERFACES]; ///>sockets to read from and write to nf devices
 	struct nf2device netfpga; ///>NetFPGA device
 	
+	uint32_t router_id;
+	uint32_t area_id;
+	uint32_t lsu_update_needed:1;
+	uint16_t pwospf_hello_interval;
+	uint32_t pwospf_lsu_interval;
+	uint32_t pwospf_lsu_broadcast;
+	uint32_t dijkstra_dirty;
+	
 	node_t* arp_cache;///> a linked list showing ARP cache
 	node_t* arp_queue;///> a linked list for ARP queue
 	node_t* rtable;///>a linked list for routing table
+	node_t* pwospf_router_list;///> a linked list for PWOSPF router list
+	node_t* pwospf_lsu_queue;///> a linked list for PWOSFP LSU packets
+	
 	
 	pthread_rwlock_t lock_arp_cache; ///> access lock for ARP cache
 	pthread_rwlock_t lock_arp_queue;///> access lock for ARP queue
 	pthread_rwlock_t lock_rtable;///> access lock for routing table
 	pthread_mutex_t lock_send;///> lock for sending packets
+	pthread_mutex_t lock_pwospf_list;///> access lock for pwospf_router_list
+	pthread_mutex_t lock_pwospf_queue;///> access lock for pwospf_lsu_queue
+	pthread_mutex_t lock_dijkstra;
+	pthread_mutex_t lock_pwospf_bcast;
+	
+	pthread_cond_t dijkstra_cond;
+	pthread_cond_t pwospf_lsu_bcast_cond;
 	
 	pthread_t arp_thread;///>ARP thread	
+	pthread_t pwospf_dijkstra_thread;
+	pthread_t pwospf_lsu_thread;
 } router_t;
 
 
@@ -75,6 +104,10 @@ int router_ip2mac(struct sr_instance* sr, uint8_t* packet, unsigned int len, str
 int router_getInterfaceIndex(router_t* router, const char* interface);
 
 int router_getInterfaceByIp(router_t* router, uint32_t ip);
+
+int router_unlockMutex(pthread_mutex_t* mutex);
+
+int router_lockMutex(pthread_mutex_t* mutex);
 
 
 #endif

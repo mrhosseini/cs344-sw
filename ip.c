@@ -11,6 +11,7 @@
 #include "pwospf.h"
 #include "ICMP.h"
 #include "rtable.h"
+#include "pwospf.h"
 
 
 #include <stdlib.h>
@@ -106,7 +107,7 @@ void ip_processPacket(struct sr_instance* sr, const uint8_t * packet, unsigned i
 		/*
 		 * if the packet is destined to the PWOSPF address then process it 
 		 */
-// 		process_pwospf_packet(sr, packet, len, interface);//TODO
+		pwospf_processPacket(sr, packet, len, interface);
 	} 
 	else {
 		/*

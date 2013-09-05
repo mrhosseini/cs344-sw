@@ -44,6 +44,8 @@ void router_initInterfaces(router_t* router, interface_t *interface, struct sr_v
 	interface->speed = vns_if.speed;
 	memcpy((unsigned char*)interface->addr, vns_if.addr, PHY_ADDR_LEN);
 	strcpy(interface->name, vns_if.name);
+	interface->neighbors = NULL;
+	interface->last_sent_hello = 0;
 	netfpga_initInterfaces(router, interface);
 	return;
 }
@@ -93,28 +95,69 @@ int router_init(struct sr_instance* sr){
 	router->if_list_index = 0;
 	router->arp_cache = NULL;
 	router->arp_queue = NULL;
+	router->router_id = 0;
+	router->area_id = 0;
+	router->lsu_update_needed = 0;
+	router->pwospf_hello_interval = 0;
+	router->pwospf_lsu_interval = 0;
+	router->pwospf_lsu_broadcast = 0;
+	router->dijkstra_dirty = 0;
 	
 	
 	/*
 	 * initialize locks
 	 */
-	if (pthread_mutex_init(&router->lock_send, NULL) != 0) {
+	if (pthread_mutex_init(&router->lock_send, NULL) != 0){
 		perror("Lock init error");
 		exit(1);
 	}
 	
-	if (pthread_rwlock_init(&router->lock_arp_cache, NULL) != 0) {
+	if (pthread_rwlock_init(&router->lock_arp_cache, NULL) != 0){
 		perror("Lock init error");
 		exit(1);
 	}
 	
-	if (pthread_rwlock_init(&router->lock_arp_queue, NULL) != 0) {
+	if (pthread_rwlock_init(&router->lock_arp_queue, NULL) != 0){
 		perror("Lock init error");
 		exit(1);
 	}
 	
-	if (pthread_rwlock_init(&router->lock_rtable, NULL) != 0) {
+	if (pthread_rwlock_init(&router->lock_rtable, NULL) != 0){
 		perror("Lock init error");
+		exit(1);
+	}
+	
+	if (pthread_mutex_init(&router->lock_pwospf_list, NULL) != 0){
+		perror("Lock init error");
+		exit(1);
+	}
+	
+	if (pthread_mutex_init(&router->lock_pwospf_queue, NULL) != 0){
+		perror("Lock init error");
+		exit(1);
+	}
+	
+	if (pthread_mutex_init(&router->lock_dijkstra, NULL) != 0){
+		perror("Lock init error");
+		exit(1);
+	}
+	
+	if (pthread_mutex_init(&router->lock_pwospf_bcast, NULL) != 0){
+		perror("Lock init error");
+		exit(1);
+	}
+	
+	
+	/*
+	 * initialize conditions
+	 */
+	if (pthread_cond_init(&router->pwospf_lsu_bcast_cond, NULL) != 0){
+		perror("LSU bcast cond init error");
+		exit(1);
+	}
+	
+	if (pthread_cond_init(&router->dijkstra_cond, NULL) != 0){
+		perror("Dijkstra cond init error");
 		exit(1);
 	}
 	
@@ -133,12 +176,12 @@ int router_init(struct sr_instance* sr){
 	router->netfpga.fd = 0;
 	router->netfpga.net_iface = 0;
 	
-	if (check_iface(&(router->netfpga))) {
+	if (check_iface(&(router->netfpga))){
 		printf("Failure connecting to NETFPGA\n");
 		exit(1);
 	}
 	
-	if (openDescriptor(&(router->netfpga))) {
+	if (openDescriptor(&(router->netfpga))){
 		printf("Failure connecting to NETFPGA\n");
 		exit(1);
 	}
@@ -271,6 +314,22 @@ int router_lockWrite(pthread_rwlock_t* lock){
 int router_unlock(pthread_rwlock_t* lock){
 	if (pthread_rwlock_unlock(lock) != 0) {
 		perror("Failure releasing lock");
+		return -1;
+	}
+	return 0;
+}
+
+int router_lockMutex(pthread_mutex_t* mutex){
+	if (pthread_mutex_lock(mutex) != 0){
+		perror("Failure locking mutex\n");
+		return -1;
+	}
+	return 0;
+}
+
+int router_unlockMutex(pthread_mutex_t* mutex){
+	if (pthread_mutex_unlock(mutex) != 0){
+		perror("Failure unlocking mutex\n");
 		return -1;
 	}
 	return 0;
