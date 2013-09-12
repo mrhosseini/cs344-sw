@@ -10,6 +10,8 @@
 #include "router.h"
 #include "ll.h"
 #include "netfpga.h"
+#include "pwospf.h"
+#include "dijkstra.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -166,28 +168,65 @@ void rtable_init(struct sr_instance* sr){
 	netfpga_writeRTable(&router->netfpga, router->rtable);
 	
 	/* check if we have a default route entry, if so we need to add it to our pwospf router */
-// 	pwospf_interface* default_route = default_route_present(rs); //TODO
+	pwospf_iface_t* default_route = pwospf_hasDefaultRoute(router);
 	
 	/*
 	 * release the rtable lock 
 	 */
 	router_unlock(&router->lock_rtable);
 	
-// 	if (default_route) { //TODO
+	if (default_route) {
 // 		lock_mutex_pwospf_router_list(rs);
-// 		
-// 		pwospf_router* r = get_router_by_rid(rs->router_id, rs->pwospf_router_list);
-// 		node* n = node_create();
-// 		n->data = default_route;
-// 		
-// 		if (r->interface_list) {
-// 			node_push_back(r->interface_list, n);
-// 		} else {
-// 			r->interface_list = n;
-// 		}
-// 		
+		router_lockMutex(&router->lock_pwospf_list);
+		
+		pwospf_router_t* r = pwospf_searchList(router->router_id, router->pwospf_router_list);
+		node_t* n = node_create();
+		n->data = default_route;
+		
+		if (r->interface_list) {
+			node_push_back(r->interface_list, n);
+		} else {
+			r->interface_list = n;
+		}
+		
 // 		unlock_mutex_pwospf_router_list(rs);
-// 	}
-// 	/* tell our dijkstra algorithm to run */
-// 	dijkstra_trigger(rs);
+	router_unlockMutex(&router->lock_pwospf_list);
+	}
+	/*
+	 * tell our dijkstra algorithm to run 
+	 */
+	dijkstra_trigger(router);
+}
+
+/*
+ * NOT Threadsafe, ensure rtable locked for write
+ */
+void rtable_updated(router_t* router){
+	/*
+	 * bubble sort by netmask 
+	 */
+	
+	int swapped = 0;
+	do {
+		swapped = 0;
+		node_t* cur = router->rtable;
+		while (cur && cur->next){
+			rtable_row_t* a = (rtable_row_t*)cur->data;
+			rtable_row_t* b = (rtable_row_t*)cur->next->data;
+			if ((ntohl(a->mask.s_addr) < ntohl(b->mask.s_addr)) ||
+			   ((a->mask.s_addr == b->mask.s_addr) && (ntohl(a->ip.s_addr) < ntohl(b->ip.s_addr))) ||
+			   ((a->mask.s_addr == b->mask.s_addr) && (a->ip.s_addr == b->ip.s_addr) && !a->is_static && b->is_static)) 
+			{
+				cur->data = b;
+				cur->next->data = a;
+				swapped = 1;
+			}
+			cur = cur->next;
+		}
+	} while (swapped);
+	
+	/*
+	 * write to hardware
+	 */
+	netfpga_writeRTable(&router->netfpga, router->rtable);
 }

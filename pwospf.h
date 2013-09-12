@@ -143,4 +143,13 @@ void* pwospf_helloThread(void* param);
 void* pwospf_lsuThread(void* param);
 
 void pwospf_helloBroadcast(struct sr_instance* sr);
+
+int pwospf_findTimedoutInterface(router_t* router, interface_t* iface);
+
+pwospf_iface_t* pwospf_hasDefaultRoute(router_t* router);
+
+void* pwospf_lsu_bcast_thread(void *param);
+
+void* pwospf_lsu_timeout_thread(void *param);
+
 #endif

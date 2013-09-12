@@ -926,7 +926,7 @@ void* pwospf_lsuThread(void* param){
 			if (diff > (router->pwospf_lsu_interval)) {
 				
 				router_lockMutex(&router->lock_pwospf_list);
-// 				start_lsu_bcast_flood(rs, NULL);//TODO
+				pwospf_lsuFlood(router, NULL);
 				router_unlockMutex(&router->lock_pwospf_list);
 				
 				/*
@@ -994,10 +994,12 @@ void pwospf_helloBroadcast(struct sr_instance* sr){
 			* have to lock the router list because we update our pwospf router from inside 
 			*/
 			router_lockMutex(&router->lock_pwospf_list);
-// 			if(determine_timedout_interface(rs, ie) == 1) { //TODO
-// 				/* the outer loop checks all interfaces, so we need this if statement */
-// 				interface_has_timedout = 1;
-// 			}
+			if (pwospf_findTimedoutInterface(router, ie) == 1){ 
+				/*
+				 * the outer loop checks all interfaces, so we need this if statement 
+				 */
+				interface_has_timedout = 1;
+			}
 			router_unlockMutex(&router->lock_pwospf_list);
 		}
 	}
@@ -1021,4 +1023,271 @@ void pwospf_helloBroadcast(struct sr_instance* sr){
 		pthread_cond_signal(&router->pwospf_lsu_bcast_cond);
 	}
 	free(packet);
+}
+
+
+int pwospf_findTimedoutInterface(router_t* router, interface_t* iface){
+	
+	int interface_has_timedout = 0;
+	time_t now;
+	int diff;
+	
+	node_t* cur = iface->neighbors;
+	while (cur) {
+		node_t* next = cur->next;
+		nbr_router_t* nbr = (nbr_router_t*) cur->data;
+		
+		/*
+		 * disable timed out interfaces  
+		 */
+		time(&now);
+		diff = (int) difftime(now, (time_t)nbr->last_rcvd_hello);
+		if (diff > (3 * router->pwospf_hello_interval)){
+			
+			interface_has_timedout = 1;
+			
+			/*
+			 * delete this interface from our router entry 
+			 */
+			pwospf_router_t* our_router = pwospf_searchList(router->router_id, router->pwospf_router_list);
+			
+			node_t* n = our_router->interface_list;
+			
+			/*
+			 * first count how many routers are on this same subnet 
+			 */
+			int count = 0;
+			while (n){
+				pwospf_iface_t *pi = (pwospf_iface_t*) n->data;
+				
+				if ( (pi->subnet.s_addr == (iface->ip & iface->mask)) && (pi->mask.s_addr == iface->mask)){
+					++count;
+				}
+				
+				n = n->next;
+			}
+			
+			assert(count > 0);
+			if (count == 1){
+				/*
+				 * if there is only one then we zero out its neighbor router, else we delete it 
+				 */
+				
+				/*
+				 * find this interface 
+				 */
+				n = our_router->interface_list;
+				while(n) {
+					pwospf_iface_t* pi = (pwospf_iface_t*) n->data;
+					
+					if ((pi->subnet.s_addr == (iface->ip & iface->mask)) && (pi->mask.s_addr == iface->mask)){
+						pi->router_id = 0;
+						break;
+					}
+					
+					n = n->next;
+				}
+				
+			} 
+			else{
+				/*
+				 * delete this interface 
+				 */
+				n = our_router->interface_list;
+				while(n) {
+					pwospf_iface_t* pi = (pwospf_iface_t*) n->data;
+					
+					if( (pi->subnet.s_addr == (iface->ip & iface->mask)) && (pi->mask.s_addr == iface->mask) && (nbr->router_id == pi->router_id)) {
+						node_remove(&our_router->interface_list, n);
+						break;
+					}
+					
+					n = n->next;
+				}
+			}
+			
+			/*
+			 * delete this neighbor from our physical interface list 
+			 */
+			node_remove(&iface->neighbors, cur);
+			
+		}
+		cur = next;
+	}
+	
+	return interface_has_timedout;
+}
+
+
+pwospf_iface_t* pwospf_hasDefaultRoute(router_t* router){
+	
+	pwospf_iface_t* DEFAULT_ROUTE = 0;
+	node_t* rtable_walker = router->rtable;
+	while(rtable_walker) {
+		
+		rtable_row_t* re = (rtable_row_t*) rtable_walker->data;
+		if (re->is_static && (re->ip.s_addr == 0) && (re->mask.s_addr == 0)) {
+			
+			DEFAULT_ROUTE = calloc(1, sizeof(pwospf_iface_t));
+			
+			DEFAULT_ROUTE->subnet.s_addr = re->ip.s_addr & re->mask.s_addr;
+			DEFAULT_ROUTE->mask.s_addr = re->mask.s_addr;
+			DEFAULT_ROUTE->router_id = 0;
+			
+			break;
+		}
+		
+		rtable_walker = rtable_walker->next;
+	}
+	
+	return DEFAULT_ROUTE;
+}
+
+
+void* pwospf_lsu_timeout_thread(void *param){
+	
+	assert(param);
+	struct sr_instance *sr = (struct sr_instance *)param;
+	router_t* router = sr_get_subsystem(sr);
+	time_t now;
+	int diff;
+	int timeout_occured = 0;
+	
+	while(1) {
+		timeout_occured = 0;
+		router_lockMutex(&router->lock_pwospf_list);
+		
+		node_t *rl_cur = router->pwospf_router_list;
+		node_t *rl_next = NULL;
+		
+		/*
+		 * eliminate lsu timedout entries 
+		 */
+		while(rl_cur) {
+			rl_next = rl_cur->next;
+			
+			pwospf_router_t* rl_entry = (pwospf_router_t *)rl_cur->data;
+			
+			/*
+			 * don't time out ourself 
+			 */
+			if (rl_entry->router_id == router->router_id) {
+				rl_cur = rl_next;
+				continue;
+			}
+			
+			time(&now);
+			diff = (int)difftime(now, rl_entry->last_update);
+			
+			/*
+			 * if(diff > 3 * LSUINT) 
+			 */
+			if (diff > (router->pwospf_lsu_interval * 3)) {
+				char addr[16];
+				inet_ntop(AF_INET, &(rl_entry->router_id), addr, 16);
+				//printf("PWOSPF ROUTER LENGTH: %u\n", node_length(rs->pwospf_router_list));
+				//printf("Timing out router with id: %s\n", addr);
+				node_t *il_cur = rl_entry->interface_list;
+				node_t *il_next = NULL;
+				
+				while(il_cur) {
+					il_next = il_cur->next;
+					node_remove(&rl_entry->interface_list, il_cur);
+					il_cur = il_next;
+				}
+				
+				node_remove(&router->pwospf_router_list, rl_cur);
+				timeout_occured = 1;
+			}
+			
+			rl_cur = rl_next;
+		}
+		
+		
+		/*
+		 * build lsu flood information for all our neighbors 
+		 */
+		if(timeout_occured == 1) {
+			//printf("PWOSPF ROUTER LENGTH: %u\n", node_length(rs->pwospf_router_list));
+			pwospf_propagate(router, NULL);
+		}
+		
+		
+		router_unlockMutex(&router->lock_pwospf_list);
+		
+		
+		/*
+		 * signal thread to send the lsu flood 
+		 */
+		if(timeout_occured == 1) {
+			pthread_cond_signal(&router->pwospf_lsu_bcast_cond);
+		}
+		
+		sleep(1);
+	}
+}
+
+void* pwospf_lsu_bcast_thread(void *param){
+	
+	assert(param);
+	struct sr_instance *sr = (struct sr_instance *)param;
+	router_t* router = sr_get_subsystem(sr);
+	
+	while(1) {
+		router_lockMutex(&router->lock_pwospf_bcast);
+		
+		pthread_cond_wait(&router->pwospf_lsu_bcast_cond, &router->lock_pwospf_bcast);
+		
+		/*
+		 * get lsu packet queue 
+		 */
+		node_t* lsu_queue = 0;
+		
+		router_lockMutex(&router->lock_pwospf_queue);
+		lsu_queue = router->pwospf_lsu_queue;
+		router->pwospf_lsu_queue = 0;
+		router_unlockMutex(&router->lock_pwospf_queue);
+		
+		router_lockRead(&router->lock_arp_cache);
+		router_lockWrite(&router->lock_arp_queue);
+		router_lockRead(&router->lock_rtable);
+		
+		/*
+		 * iterate over the queue and send each packet 
+		 */
+		node_t *cur = lsu_queue;
+		node_t *next = 0;
+		while(cur) {
+			next = cur->next;
+			pwospf_lsu_item_t *lqe = (pwospf_lsu_item_t *)cur->data;
+			
+			//print_packet(lqe->packet, lqe->len);
+			
+			struct in_addr next_hop;
+			int next_hop_iface = 0;;
+			
+			
+			/*
+			 * is there an entry in our routing table for the destination? 
+			 */
+			if (!rtable_nextHop(router, &((ip_getHeader(lqe->packet))->ip_dst), &next_hop, &next_hop_iface )) {
+				router_ip2mac(sr, lqe->packet, lqe->len, &next_hop, router->if_list[next_hop_iface].name);
+			} else {
+				char dest[16];
+				inet_ntop(AF_INET, &((ip_getHeader(lqe->packet))->ip_dst), dest, 16);
+				//printf("FAILURE SENDING LSU PACKET Could Not Match: %s\n", dest);
+			}
+			
+			free(lqe);
+			free(cur);
+			cur = next;
+		}
+		
+		router_unlock(&router->lock_rtable);
+		router_unlock(&router->lock_arp_queue);
+		router_unlock(&router->lock_arp_cache);
+		
+		router_unlockMutex(&router->lock_pwospf_bcast);
+	}
+	
 }

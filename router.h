@@ -80,8 +80,11 @@ typedef struct Router{
 	pthread_cond_t pwospf_lsu_bcast_cond;
 	
 	pthread_t arp_thread;///>ARP thread	
-	pthread_t pwospf_dijkstra_thread;
+	pthread_t dijkstra_thread;
 	pthread_t pwospf_lsu_thread;
+	pthread_t pwospf_hello_thread;
+	pthread_t pwospf_lsu_bcast_thread;
+	pthread_t pwospf_lsu_timeout_thread;
 } router_t;
 
 
@@ -109,5 +112,10 @@ int router_unlockMutex(pthread_mutex_t* mutex);
 
 int router_lockMutex(pthread_mutex_t* mutex);
 
+interface_t* router_getInterfaceByRid(interface_t* if_list, uint32_t rid);
+
+interface_t* router_getInterfaceByMask(interface_t* if_list, struct in_addr* subnet, struct in_addr* mask);
+
+nbr_router_t* router_getNbrByRid(interface_t* iface, uint32_t rid);
 
 #endif

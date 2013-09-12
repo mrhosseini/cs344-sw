@@ -81,7 +81,7 @@ void ip_processPacket(struct sr_instance* sr, const uint8_t * packet, unsigned i
 				break;
 			case IP_PROTO_PWOSPF:
 				printf("\n\tPacket IP Proto : PWOSPF, processing ...");
-// 				process_pwospf_packet(sr, packet, len, interface);//TODO
+				pwospf_processPacket(sr, packet, len, interface);
 				break;
 			case IP_PROTO_UDP:
 				/*

@@ -23,5 +23,9 @@ typedef struct RoutingTableRow {
 int rtable_nextHop(router_t* router, struct in_addr* dest, struct in_addr* next_hop, int* next_hop_ifIndex);
 
 void rtable_init(struct sr_instance* sr);
+
+void rtable_updated(router_t* router);
+
 #endif
+
 

@@ -19,6 +19,7 @@
 #include "ethernet.h"
 #include "arp.h"
 #include "ip.h"
+#include "dijkstra.h"
 
 
 #include <stdlib.h>
@@ -196,10 +197,30 @@ int router_init(struct sr_instance* sr){
 	#endif
 	
 	/*
-	 * create ARP thread
+	 * creating threads
 	 */
 	if (pthread_create(&router->arp_thread, NULL, arp_thread, (void *)sr) != 0){
 		perror("ARP thread create error");
+	}
+
+	if (pthread_create(&router->dijkstra_thread, NULL, dijkstra_thread, (void *)router) != 0){
+		perror("dijkstra thread create error");
+	}
+	
+	if (pthread_create(&router->pwospf_lsu_thread, NULL, pwospf_lsuThread, (void *)sr) != 0){
+		perror("pwospf_lsu_thread create error");
+	}
+	
+	if (pthread_create(&router->pwospf_hello_thread, NULL, pwospf_helloThread, (void *)sr) != 0){
+		perror("pwospf_hello_thread create error");
+	}
+	
+	if (pthread_create(&router->pwospf_lsu_bcast_thread, NULL, pwospf_lsu_bcast_thread, (void *)sr) != 0){
+		perror("pwospf_lsu_bcast_thread create error");
+	}
+	
+	if (pthread_create(&router->pwospf_lsu_timeout_thread, NULL, pwospf_lsu_timeout_thread, (void *)sr) != 0){
+		perror("pwospf_lsu_timeout_thread create error");
 	}
 	
 	/*
@@ -386,4 +407,57 @@ int router_getInterfaceByIp(router_t* router, uint32_t ip){
 		}
 	}
 	return -1;
+}
+
+/**
+ * Find and return the interface that has a neighbor with the given router id.
+ *
+ * @param rid: neighbor router id
+ * @param if_list: interface list
+ *
+ * @return the pointer to interface with rid as the neighboring router
+ */
+interface_t* router_getInterfaceByRid(interface_t* if_list, uint32_t rid){
+	if (!rid) {
+		return NULL;
+	}
+	
+	int i = 0;
+	for (i = 0; i < NUM_INTERFACES; i++){
+		node_t* nbr_walker = if_list[i].neighbors;
+		
+		while (nbr_walker) {
+			nbr_router_t* nbr = nbr_walker->data;
+			
+			if (nbr->router_id == rid) {
+				return &if_list[i];
+			}
+			
+			nbr_walker = nbr_walker->next;
+		}
+	}
+	return NULL;
+}
+
+
+interface_t* router_getInterfaceByMask(interface_t* if_list, struct in_addr* subnet, struct in_addr* mask){
+	int i = 0;
+	for (i = 0; i < NUM_INTERFACES; i++){
+		if (((if_list[i].ip & if_list[i].mask) == subnet->s_addr) && (if_list[i].mask == mask->s_addr)) {
+			return &if_list[i];
+		}
+	}
+	return NULL;
+}
+
+nbr_router_t* router_getNbrByRid(interface_t* iface, uint32_t rid){
+	node_t* cur = iface->neighbors;
+	while (cur) {
+		nbr_router_t* nbr = (nbr_router_t*)cur->data;
+		if (nbr->router_id == rid) {
+			return nbr;
+		}
+		cur = cur->next;
+	}
+	return NULL;
 }
